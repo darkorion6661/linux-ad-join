@@ -120,8 +120,8 @@ readonly SSSD_CACHE_CREDENTIALS=1
 readonly SSSD_KRB5_AUTH_TIMEOUT=60
 readonly SSSD_LDAP_OPT_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
 readonly SSSD_PAM_ID_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
-readonly SSSD_IGNORE_GROUP_MEMBERS=1
-readonly SSSD_USE_FQDN_NAMES=1
+readonly SSSD_IGNORE_GROUP_MEMBERS=0
+readonly SSSD_USE_FQDN_NAMES=0
 readonly SSSD_PAM_PWD_EXP_DAYS=14
 
 readonly PAM_SESSIONS_CONFIG_FILE="/etc/pam.d/common-session"
@@ -2150,7 +2150,7 @@ print_sssd_config()
     echo "krb5_auth_timeout = ${SSSD_KRB5_AUTH_TIMEOUT}"
     echo "ldap_opt_timeout = ${SSSD_LDAP_OPT_TIMEOUT}"
     echo "access_provider = simple"
-    echo "ignore_group_members = $(print_sssd_bool "${SSSD_IGNORE_GROUP_MEMBERS}")""
+    echo "ignore_group_members = $(print_sssd_bool "${SSSD_IGNORE_GROUP_MEMBERS}")"
 
     return 0
 }
@@ -2406,7 +2406,7 @@ configure_sudo_permissions()
             group_name="$(print_group_fqdn "${group_name}" "${domain_name}")" || continue
         fi
 
-        test_group "${group_name}" || continue
+        # test_group "${group_name}" || continue
 
         line="$(replace_string "${group_name}" ' ' '\\ ')"
         line="%${line} ALL=(ALL:ALL) ALL"
@@ -2422,7 +2422,7 @@ configure_sudo_permissions()
     chown "root:root" "${sudo_config_file}" || return 1
     chmod '0440' "${sudo_config_file}" || return 1
 
-    stop_service "${SUDO_SERVICE_NAME}" && start_service "${SUDO_SERVICE_NAME}" || return 1
+    # stop_service "${SUDO_SERVICE_NAME}" && start_service "${SUDO_SERVICE_NAME}" || return 1
 
     debug "Sudo permissions configured successfully."
 
@@ -2650,40 +2650,41 @@ main() {
         domain_name="$(print_domain_name)" || exit 1
     fi
 
-    install_dnsutils || exit 1
-    test_dns_settings "${domain_name}" || exit 1
+     install_dnsutils || exit 1
+     test_dns_settings "${domain_name}" || exit 1
 
-    if [[ -z "${server_list}" ]] ; then
-        server_list="$(print_domain_controllers "${domain_name}")" || exit 1
-    fi
+     if [[ -z "${server_list}" ]] ; then
+         server_list="$(print_domain_controllers "${domain_name}")" || exit 1
+     fi
 
-    install_dnsmasq && configure_dnsmasq "${domain_name}" "${server_list}" || exit 1
-    test_dns_settings "${domain_name}" || exit 1
+    #  install_dnsmasq && configure_dnsmasq "${domain_name}" "${server_list}" || exit 1
+    #  test_dns_settings "${domain_name}" || exit 1
 
-    install_ntp || exit 1
-    configure_ntp "${server_list}" || exit 1
+     install_ntp || exit 1
+     configure_ntp "${server_list}" || exit 1
 
-    install_kerberos && configure_kerberos "${domain_name}" "${server_list}" || exit 1
+    #  install_kerberos && configure_kerberos "${domain_name}" "${server_list}" || exit 1
+install_kerberos || exit 1
+     user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
 
-    user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
-
-    install_realm && install_sssd || exit 1
-    ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
-    #join_realm "${domain_name}" "${ldap_server_list}" || exit 1
+     install_realm && install_sssd || exit 1
+     #ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
+    # #join_realm "${domain_name}" "${ldap_server_list}" || exit 1
     
-    ################################################### Join realm command
-    realmd join -v --
-    ##################################
+    # ################################################### Join realm command
+    realm join --user=${user_name} --computer-ou=OU=Linux,OU=SEF,OU=Specialised,OU=Workstations qut.edu.au
+    # ##################################
 
-    configure_sssd "${domain_name}" "${ldap_server_list}" || exit 1
+    # configure_sssd "${domain_name}" "${ldap_server_list}" || exit 1
 
-    install_pam_modules && configure_pam || exit 1
+     install_pam_modules && configure_pam || exit 1
 
-    configure_login_permissions "${domain_name}" || exit 1
-    install_sudo && configure_sudo_permissions "${domain_name}" || exit 1
+     configure_login_permissions "${domain_name}" || exit 1
+     install_sudo && configure_sudo_permissions "${domain_name}" || exit 1
+     #also add user to sudo
 
-    install_ssh_server && configure_ssh_gssapi || exit 1
-    install_bash_completion && configure_bash_completion || exit 1
+     install_ssh_server && configure_ssh_gssapi || exit 1
+     install_bash_completion && configure_bash_completion || exit 1
 
     debug "All configuration changes by ${PROGNAME} was finished successfully."
 
