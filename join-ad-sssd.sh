@@ -57,6 +57,11 @@ readonly LOG_FILE="/var/log/${LOG_NAME}/${LOG_NAME}.log"
 readonly SYSLOG_ENABLED=0
 readonly SYSLOG_PRIORITY="user.notice"
 
+# Default Site Configuration
+readonly DEFAULT_SERVER_LIST="time.campus.qut.edu.au"
+readonly DEFAULT_DOMAIN_NAME="qut.edu.au"
+
+
 
 # Global constants
 
@@ -81,6 +86,7 @@ readonly NTP_CONFIG_FILE="/etc/ntp.conf"
 readonly NTP_CONFIG_BACKUP="${BACKUP_DIR}/$(basename "${NTP_CONFIG_FILE}")"
 readonly NTP_SERVICE_NAME="ntp"
 readonly NTP_TEMP_LOG="/tmp/ntpd.log"
+readonly NTP_SERVER_NAME="time.campus.qut.edu.au"
 
 readonly PORT_CONNECT_TIMEOUT=5
 readonly PORT_TEST_COMMAND="cat </dev/null >/dev/tcp/%s/%s"
@@ -114,8 +120,9 @@ readonly SSSD_CACHE_CREDENTIALS=1
 readonly SSSD_KRB5_AUTH_TIMEOUT=60
 readonly SSSD_LDAP_OPT_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
 readonly SSSD_PAM_ID_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
-readonly SSSD_IGNORE_GROUP_MEMBERS=0
-readonly SSSD_USE_FQDN_NAMES=0
+readonly SSSD_IGNORE_GROUP_MEMBERS=1
+readonly SSSD_USE_FQDN_NAMES=1
+readonly SSSD_PAM_PWD_EXP_DAYS=14
 
 readonly PAM_SESSIONS_CONFIG_FILE="/etc/pam.d/common-session"
 readonly PAM_MKHOMEDIR_CONFIG_FILE="/usr/share/pam-configs/mkhomedir"
@@ -2122,6 +2129,7 @@ print_sssd_config()
     echo "[pam]"
     echo "debug_level = ${SSSD_DEBUG_LEVEL}"
     echo "pam_id_timeout = ${SSSD_PAM_ID_TIMEOUT}"
+    echo "pam_pwd_expiration_warning = ${SSSD_PAM_PWD_EXP_DAYS}"
     echo ""
     echo "[domain/${domain_name}]"
     echo "debug_level = ${SSSD_DEBUG_LEVEL}"
@@ -2135,13 +2143,14 @@ print_sssd_config()
     echo "krb5_store_password_if_offline = True"
     echo "default_shell = /bin/bash"
     echo "ldap_id_mapping = True"
-    echo "fallback_homedir = /home/%d/%u"
+    echo "fallback_homedir = /home/%u"
     echo "sudo_provider = none"
     echo "use_fully_qualified_names = $(print_sssd_bool "${SSSD_USE_FQDN_NAMES}")"
     echo "cache_credentials = $(print_sssd_bool "${SSSD_CACHE_CREDENTIALS}")"
     echo "krb5_auth_timeout = ${SSSD_KRB5_AUTH_TIMEOUT}"
     echo "ldap_opt_timeout = ${SSSD_LDAP_OPT_TIMEOUT}"
     echo "access_provider = simple"
+    echo "ignore_group_members = $(print_sssd_bool "${SSSD_IGNORE_GROUP_MEMBERS}")""
 
     return 0
 }
@@ -2660,7 +2669,11 @@ main() {
 
     install_realm && install_sssd || exit 1
     ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
-    join_realm "${domain_name}" "${ldap_server_list}" || exit 1
+    #join_realm "${domain_name}" "${ldap_server_list}" || exit 1
+    
+    ################################################### Join realm command
+    realmd join -v --
+    ##################################
 
     configure_sssd "${domain_name}" "${ldap_server_list}" || exit 1
 
