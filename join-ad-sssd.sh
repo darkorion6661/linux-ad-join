@@ -121,7 +121,7 @@ readonly SSSD_CACHE_CREDENTIALS=1
 readonly SSSD_KRB5_AUTH_TIMEOUT=60
 readonly SSSD_LDAP_OPT_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
 readonly SSSD_PAM_ID_TIMEOUT=${SSSD_KRB5_AUTH_TIMEOUT}
-readonly SSSD_IGNORE_GROUP_MEMBERS=0
+readonly SSSD_IGNORE_GROUP_MEMBERS=1
 readonly SSSD_USE_FQDN_NAMES=0
 readonly SSSD_PAM_PWD_EXP_DAYS=14
 
@@ -2390,9 +2390,9 @@ configure_sudo_permissions()
     debug "Configure sudo permissions."
     debug "Sudoers file: '${sudo_config_file}'."
 
-    while : ; do
-
-        read -p "${SUDO_GROUP_PROMPT}" group_name || break
+    # while : ; do
+        group_name = "lets-techsup-admin"
+        # read -p "${SUDO_GROUP_PROMPT}" group_name || break
         [[ -z "${group_name}" ]] && break
 
         group_name="$(print_lowercase "${group_name}")" || continue
@@ -2410,7 +2410,7 @@ configure_sudo_permissions()
 
         sudoers_lines="$(add_line "${sudoers_lines}" "${line}")"
 
-    done
+    # done
 
     write_to_file "${sudoers_lines}" "${sudo_config_file}" || return 1
 
@@ -2674,10 +2674,11 @@ main() {
 
     #  install_kerberos && configure_kerberos "${domain_name}" "${server_list}" || exit 1
      install_kerberos || exit 1
-     user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
+    #  user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
 
      install_realm && install_sssd || exit 1
      #ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
+     user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
      join_realm "${domain_name}" "${user_name}" || exit 1
     
     # ################################################### Join realm command
@@ -2688,7 +2689,7 @@ main() {
 
      install_pam_modules && configure_pam || exit 1
 
-     configure_login_permissions "${domain_name}" || exit 1
+     #  configure_login_permissions "${domain_name}" || exit 1
      install_sudo && configure_sudo_permissions "${domain_name}" || exit 1
      #also add user to sudo
 
