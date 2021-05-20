@@ -61,7 +61,8 @@ readonly SYSLOG_PRIORITY="user.notice"
 readonly DEFAULT_SERVER_LIST="time.campus.qut.edu.au"
 readonly DEFAULT_DOMAIN_NAME="qut.edu.au"
 
-
+readonly COMPUTER_AD_OU="OU=Linux,OU=SEF,OU=Specialised,OU=Workstations"
+readonly SITE_REQUIRED_PACKAGES="libpangox-1.0-0"
 
 # Global constants
 
@@ -1997,12 +1998,11 @@ print_realmd_config()
 join_realm()
 {
     local domain_name="${1}"
-    local server_list="${2}"
+    local user_name="${2}"
 
     [[ -z "${domain_name}" ]] && return 0
-    [[ -z "${server_list}" ]] && return 0
+    [[ -z "${user_name}" ]] && return 0    
 
-    local server=""
     local os_name=""
     local os_version=""
     local current_domain_name=""
@@ -2038,22 +2038,19 @@ join_realm()
         hostname "${host_name_fqdn}" || return 1
     fi
 
-    while read server ; do
+    
 
-        debug "Join to the domain '${domain_name}' by the server '${server}'..."
+    debug "Join to the domain '${domain_name}''..."
 
-        "${REALM_PATH}" join \
-            --verbose \
-            --client-software="sssd" \
-            --server-software="active-directory" \
-            --membership-software="adcli" \
-            "${server}" || continue
+    "${REALM_PATH}" join \
+        --verbose \
+        --user="${user_name}" \
+        --computer-ou="${COMPUTER_AD_OU}" 
+        "${domain_name}" || continue
 
-        is_joined=1
-        debug "Joined successfully."
-        break
+    is_joined=1
+    debug "Joined successfully."
 
-    done <<< "${server_list}"
 
     if [[ "${host_name_short}" != "${host_name_fqdn}" ]] ; then
         debug "Change hostname back: '${host_name_short}'."
@@ -2091,6 +2088,27 @@ print_sssd_bool()
 }
 
 
+# Prints '/home/%U' or '/home/%U%D' for sssd configuration file
+# Arguments:
+#   1: flag value
+# Returns:
+#   0: success
+#   1: failure
+print_user_home()
+{
+    local fqdn_config="${1}"
+
+    [[ -z "${fqdn_config}" ]] && return 0
+
+    if is_true "${fqdn_config}" ; then
+        printf "%s" "/home/%u@%d"
+    else
+        printf "%s" "/home/%u"
+    fi
+
+    return 0
+}
+
 # Prints contents of the sssd configuration file
 # Arguments:
 #   1: domain name
@@ -2102,29 +2120,13 @@ print_sssd_bool()
 print_sssd_config()
 {
     local domain_name="${1}"
-    local address_list="${2}"
 
     [[ -z "${domain_name}" ]] && return 0
-
-    local server_list="$(print_hostname_or_address "${address_list}")"
-    local backup_server_list=""
-
-    if [[ -z "${server_list}" ]] ; then
-        server_list="${SSSD_DISCOVERY_SERVER}"
-    else
-        if is_true "${SSSD_AD_SERVER_DISCOVERY}" ; then
-            backup_server_list="${SSSD_DISCOVERY_SERVER}"
-        fi
-    fi
 
     echo "[sssd]"
     echo "debug_level = ${SSSD_DEBUG_LEVEL}"
     echo "domains = ${domain_name}"
     echo "config_file_version = 2"
-    echo "services = nss, pam, sudo"
-    echo ""
-    echo "[nss]"
-    echo "debug_level = ${SSSD_DEBUG_LEVEL}"
     echo ""
     echo "[pam]"
     echo "debug_level = ${SSSD_DEBUG_LEVEL}"
@@ -2134,22 +2136,16 @@ print_sssd_config()
     echo "[domain/${domain_name}]"
     echo "debug_level = ${SSSD_DEBUG_LEVEL}"
     echo "ad_domain = ${domain_name}"
-    echo "ad_server = $(join_lines "${server_list}" ", ")"
-    echo "ad_backup_server = ${backup_server_list}"
-    echo "ad_hostname = $(print_host_fqdn "${domain_name}")"
     echo "krb5_realm = $(print_realm_name "${domain_name}")"
     echo "realmd_tags = manages-system joined-with-adcli"
     echo "id_provider = ad"
     echo "krb5_store_password_if_offline = True"
     echo "default_shell = /bin/bash"
     echo "ldap_id_mapping = True"
-    echo "fallback_homedir = /home/%u"
-    echo "sudo_provider = none"
+    echo "fallback_homedir = $(print_user_home "${SSSD_USE_FQDN_NAMES}")"
     echo "use_fully_qualified_names = $(print_sssd_bool "${SSSD_USE_FQDN_NAMES}")"
     echo "cache_credentials = $(print_sssd_bool "${SSSD_CACHE_CREDENTIALS}")"
-    echo "krb5_auth_timeout = ${SSSD_KRB5_AUTH_TIMEOUT}"
-    echo "ldap_opt_timeout = ${SSSD_LDAP_OPT_TIMEOUT}"
-    echo "access_provider = simple"
+    echo "access_provider = ad"
     echo "ignore_group_members = $(print_sssd_bool "${SSSD_IGNORE_GROUP_MEMBERS}")"
 
     return 0
@@ -2187,13 +2183,12 @@ clear_sssd_cache()
 configure_sssd()
 {
     local domain_name="${1}"
-    local server_list="${2}"
 
     [[ -z "${domain_name}" ]] && return 0
 
     debug "Configure sssd."
 
-    write_to_file "$(print_sssd_config "${domain_name}" "${server_list}")" \
+    write_to_file "$(print_sssd_config "${domain_name}")" \
         "${SSSD_CONFIG_FILE}" || return 1
 
     chown 'root:root' "${SSSD_CONFIG_FILE}" || return 1
@@ -2203,7 +2198,7 @@ configure_sssd()
     clear_sssd_cache || return 1
     start_service "${SSSD_SERVICE_NAME}" || return 1
 
-    debug "Sssd configured successfully."
+    debug "sssd configured successfully."
 
     return 0
 }
@@ -2429,6 +2424,20 @@ configure_sudo_permissions()
     return 0
 }
 
+# Installs site required packages
+# Arguments:
+#   None
+# Returns:
+#   0: success
+#   1: failure
+# TODO:
+# - add support for array of packages
+install_site_req_packages()
+{
+    test_package "${SITE_REQUIRED_PACKAGES}" || install_package "${SITE_REQUIRED_PACKAGES}" || return 1
+
+    return 0
+}
 
 # Installs openssh-server package
 # Arguments:
@@ -2664,18 +2673,18 @@ main() {
      configure_ntp "${server_list}" || exit 1
 
     #  install_kerberos && configure_kerberos "${domain_name}" "${server_list}" || exit 1
-install_kerberos || exit 1
+     install_kerberos || exit 1
      user_name="$(init_user_name "${domain_name}" "${user_name}")" || exit 1
 
      install_realm && install_sssd || exit 1
      #ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
-    # #join_realm "${domain_name}" "${ldap_server_list}" || exit 1
+    join_realm "${domain_name}" "${user_name}" || exit 1
     
     # ################################################### Join realm command
-    realm join --user=${user_name} --computer-ou=OU=Linux,OU=SEF,OU=Specialised,OU=Workstations qut.edu.au
+    #realm join --user="${user_name}" --computer-ou="${COMPUTER_AD_OU}" "${domain_name}"
     # ##################################
 
-    # configure_sssd "${domain_name}" "${ldap_server_list}" || exit 1
+     configure_sssd "${domain_name}" || exit 1
 
      install_pam_modules && configure_pam || exit 1
 
@@ -2685,6 +2694,8 @@ install_kerberos || exit 1
 
      install_ssh_server && configure_ssh_gssapi || exit 1
      install_bash_completion && configure_bash_completion || exit 1
+
+     install_site_req_packages || exit 1
 
     debug "All configuration changes by ${PROGNAME} was finished successfully."
 
