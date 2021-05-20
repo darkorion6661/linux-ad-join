@@ -2250,9 +2250,9 @@ configure_pam()
 {
     debug "Configure PAM."
 
-    write_to_file "$(print_pam_mkhomedir_config)" "${PAM_MKHOMEDIR_CONFIG_FILE}" || return 1
+    # write_to_file "$(print_pam_mkhomedir_config)" "${PAM_MKHOMEDIR_CONFIG_FILE}" || return 1
 
-    "${PAM_AUTH_UPDATE_PATH}" --force --package || return 1
+    "${PAM_AUTH_UPDATE_PATH}" --enable mkhomedir || return 1
 
     debug "PAM configured successfully."
 
