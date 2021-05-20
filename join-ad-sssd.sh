@@ -1827,17 +1827,17 @@ init_user_name()
 
     realm_name="$(print_realm_name "${domain_name}")" || return 1
 
-    while : ; do
+    # while : ; do
 
         user_name="$(print_user_name "${user_name}")" || return 1
 
-        if init_kerberos_ticket "${realm_name}" "${user_name}" ; then
-            break
-        else
-            clear_kerberos_ticket
-            user_name=""
-        fi
-    done
+    #     if init_kerberos_ticket "${realm_name}" "${user_name}" ; then
+    #         break
+    #     else
+    #         clear_kerberos_ticket
+    #         user_name=""
+    #     fi
+    # done
 
     echo "${user_name}"
 
@@ -2678,7 +2678,7 @@ main() {
 
      install_realm && install_sssd || exit 1
      #ldap_server_list="$(print_ldap_server "${server_list}")" || exit 1
-    join_realm "${domain_name}" "${user_name}" || exit 1
+     join_realm "${domain_name}" "${user_name}" || exit 1
     
     # ################################################### Join realm command
     #realm join --user="${user_name}" --computer-ou="${COMPUTER_AD_OU}" "${domain_name}"
